@@ -15,9 +15,10 @@ repeatsOnce = uncurry (==) . splitHalf . show
 repeatsMany :: Int -> Bool
 repeatsMany n = any chunkRepeats chunks
   where s = show n
-        chunks = filter ((> 1) . length) $ fmap (`chunksOf` s) [1 .. length s]
+        chunks = fmap (`chunksOf` s) [1 .. length s]
 
 chunkRepeats :: [String] -> Bool
+chunkRepeats [_] = False
 chunkRepeats (h:t) = all (== h) t
 chunkRepeats _ = False
 
