@@ -1,6 +1,6 @@
 module Main where
 
-import Data.Maybe (catMaybes)
+import Data.Maybe (mapMaybe)
 
 main :: IO ()
 main = do
@@ -25,14 +25,14 @@ pointsAtZero curr L n = (100 - curr' + n) `div` 100
 pointsAtZero curr R n = (curr + n) `div` 100
 
 shift :: Int -> Dir -> Int -> Int
-shift curr dir n = (curr `o` n `mod` 100)
-  where o = case dir of
-              L -> (-)
-              R -> (+)
+shift curr dir n = curr `op` n `mod` 100
+  where op = case dir of
+               L -> (-)
+               R -> (+)
 
 parseInput :: String -> [(Dir, Int)]
-parseInput = catMaybes . fmap parseLine . lines
+parseInput = mapMaybe parseLine . lines
 
 parseLine :: String -> Maybe (Dir, Int)
-parseLine (c:n) = Just (read [c] :: Dir, read n :: Int)
+parseLine (c:n) = Just (read [c], read n)
 parseLine _ = Nothing
