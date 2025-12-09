@@ -2,14 +2,23 @@
 
 module Main where
 
+import Data.List (sort)
 import Data.Set (Set)
 import qualified Data.Set as S
 
 type Coords = (Int, Int)
 
+data Beam = Beam
+  { beamCoords :: Coords
+  , beamCount :: Int }
+  deriving (Show, Eq, Ord)
+
+type Beams = [Beam]
+type Splitters = Set Coords
+
 data BeamState = BeamState
-  { beams :: Set Coords
-  , splitters :: Set Coords
+  { beams :: Beams
+  , splitters :: Splitters
   , splitCount :: Int }
   deriving Show
 
@@ -19,6 +28,7 @@ main = do
   let height = maximum $ S.map snd $ splitters beamState
   let finalState = run height beamState
   putStrLn $ "Part 1: " <> show (splitCount finalState)
+  putStrLn $ "Part 2: " <> show (sum $ fmap beamCount $ beams finalState)
 
 step :: BeamState -> BeamState
 step BeamState { beams, splitters, splitCount } =
@@ -34,28 +44,38 @@ run :: Int -> BeamState -> BeamState
 run 0 bs = bs
 run n bs = run (n - 1) $ step bs
 
-incrementBeams :: Set Coords -> Set Coords
-incrementBeams beams = S.map (\(x, y) -> (x, y + 1)) beams
+incrementBeams :: Beams -> Beams
+incrementBeams beams = fmap (\(Beam (x, y) n) -> Beam (x, y + 1) n) beams
 
-countCollisions :: Set Coords -> Set Coords -> Int
-countCollisions splitters beams = S.size $ S.intersection beams splitters
+countCollisions :: Splitters -> Beams -> Int
+countCollisions splitters =
+  S.size . S.intersection splitters . S.fromList . fmap beamCoords
 
-splitCollisions :: Set Coords -> Set Coords -> Set Coords
-splitCollisions splitters =
-  S.fromList . concat . fmap (splitBeam splitters) . S.toList
+splitCollisions :: Splitters -> Beams -> Beams
+splitCollisions splitters = mergeBeams . concat . fmap (splitBeam splitters)
 
-splitBeam :: Set Coords -> Coords -> [Coords]
-splitBeam splitters beam
-  | S.member beam splitters = [(fst beam - 1, snd beam),
-                               (fst beam + 1, snd beam)]
+mergeBeams :: Beams -> Beams
+mergeBeams = go . sort
+  where go (b1@(Beam coords1 n1) : b2@(Beam coords2 n2) : bs) =
+          if coords1 == coords2
+             then Beam coords1 (n1 + n2) : go bs
+             else b1 : go (b2 : bs)
+        go b = b
+
+splitBeam :: Splitters -> Beam -> Beams
+splitBeam splitters beam@(Beam coords@(x, y) n)
+  | S.member coords splitters = [Beam (x - 1, y) n, Beam (x + 1, y) n]
   | otherwise = [beam]
 
 parseInput :: String -> BeamState
-parseInput s = BeamState { beams = getCoordSet 'S' xycs
-                         , splitters = getCoordSet '^' xycs
+parseInput s = BeamState { beams = fmap initBeam $ getCoords 'S' xycs
+                         , splitters = S.fromList $ getCoords '^' xycs
                          , splitCount = 0 }
   where xycs = [ ((x, y), c) | (y, row) <- zip [0 ..] (lines s)
                              , (x, c) <- zip [0 ..] row ]
 
-getCoordSet :: Char -> [(Coords, Char)] -> Set Coords
-getCoordSet c = S.fromList . map fst . filter ((== c) . snd)
+initBeam :: Coords -> Beam
+initBeam coords = Beam coords 1
+
+getCoords :: Char -> [(Coords, Char)] -> [Coords]
+getCoords c = fmap fst . filter ((== c) . snd)
