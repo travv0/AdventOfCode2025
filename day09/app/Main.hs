@@ -2,6 +2,7 @@ module Main where
 
 import Data.Maybe (mapMaybe, catMaybes)
 import Data.List.Split (splitOn)
+import Debug.Trace
 
 data Tile = Tile Double Double deriving (Eq, Ord, Show)
 data Edge = Edge Tile Tile deriving (Show)
@@ -38,26 +39,30 @@ tileInPolygon (Tile px py) = (== 1) . (`mod` 2) . length . filter intersectsEdge
           min vy1 vy2 < py && py < max vy1 vy2 && px < xIntersect edge
 
 edgesIntersect :: Edge -> Edge -> Bool
-edgesIntersect (Edge (Tile ax1 ay1) (Tile ax2 ay2))
-               (Edge (Tile bx1 by1) (Tile bx2 by2))
-  | ax1 == ax2 && bx1 == bx2 = False
-  | ay1 == ay2 && by1 == by2 = False
-  -- a is vertical, b is horizontal
-  | ax1 == ax2 = min ay1 ay2 <= by1 && by1 <= max ay1 ay2
-                 && min bx1 bx2 <= ax1 && ax1 <= max bx1 bx2
-                 && ay1 /= by1 && ay2 /= by1
-  -- a is horizontal, b is vertical
-  | bx1 == bx2 = min by1 by2 <= ay1 && ay1 <= max by1 by2
-                 && min ax1 ax2 <= bx1 && bx1 <= max ax1 ax2
-                 && by1 /= ay1 && by2 /= ay1
+edgesIntersect _inner@(Edge (Tile ix1 iy1) (Tile ix2 iy2))
+               _outer@(Edge (Tile ox1 oy1) (Tile ox2 oy2))
+   -- both edges are vertical
+  | ox1 == ox2 && ix1 == ix2 = ox1 == ix1
+                               && (min oy1 oy2 < max iy1 iy2 && max oy1 oy2 > min iy1 iy2) -- overlap check
+                               && (max oy1 oy2 < max iy1 iy2 || min oy1 oy2 > min iy1 iy2) -- inner extends beyond outer
+  -- both edges are horizontal
+  | oy1 == oy2 && iy1 == iy2 = oy1 == iy1
+                               && (min ox1 ox2 < max ix1 ix2 && max ox1 ox2 > min ix1 ix2)
+                               && (max ox1 ox2 < max ix1 ix2 || min ox1 ox2 > min ix1 ix2)
+  -- outer is vertical, inner is horizontal
+  | ox1 == ox2 = min oy1 oy2 < iy1 && iy1 < max oy1 oy2
+                 && min ix1 ix2 < ox1 && ox1 < max ix1 ix2
+  -- outer is horizontal, inner is vertical
+  | ix1 == ix2 = min iy1 iy2 < oy1 && oy1 < max iy1 iy2
+                 && min ox1 ox2 < ix1 && ix1 < max ox1 ox2
   | otherwise = error "edges must be horizontal or vertical"
 
 anyEdgesIntersect :: Edge -> [Edge] -> Bool
-anyEdgesIntersect edge = any id . fmap (edgesIntersect edge)
+anyEdgesIntersect innerEdge = any (edgesIntersect innerEdge)
 
 rectangleInPolygon :: Tile -> Tile -> [Edge] -> Bool
 rectangleInPolygon (Tile x1 y1) (Tile x2 y2) edges =
-  all (flip tileInPolygon edges) sideTiles
+  all (`tileInPolygon` edges) sideTiles
     where
       sideTiles = concat [[Tile x y1 | x <- [min x1 x2 .. max x1 x2]],
                           [Tile x y2 | x <- [min x1 x2 .. max x1 x2]],
@@ -76,6 +81,19 @@ calcAreas tiles = [area | tile1@(Tile x1 y1) <- tiles
                         , tile1 < tile2]
 
 
+calcValid :: [Tile] -> [Edge] -> [(Tile, Tile)]
+calcValid tiles edges =
+  [area | tile1@(Tile x1 y1) <- tiles
+        , tile2@(Tile x2 y2) <- tiles
+        , let area = (tile1, tile2)
+        , let res = rectEdges tile1 tile2
+        , tile1 < tile2
+        , let intersects = any (`anyEdgesIntersect` edges) res
+        -- , trace (show tile1 ++ " " ++ show tile2 ++ " intersects: " ++ show intersects) True
+        , not intersects]
+        -- , all (`tileInPolygon` edges) (rectCorners tile1 tile2)]
+        -- , rectangleInPolygon tile1 tile2 edges]
+
 calcValidAreas :: [Tile] -> [Edge] -> [Double]
 calcValidAreas tiles edges =
   [area | tile1@(Tile x1 y1) <- tiles
@@ -83,9 +101,18 @@ calcValidAreas tiles edges =
         , let area = (abs (x1 - x2) + 1) * (abs (y1 - y2) + 1)
         , let res = rectEdges tile1 tile2
         , tile1 < tile2
-        , not (any (flip anyEdgesIntersect res) edges)]
-        -- , all (flip tileInPolygon edges) (rectCorners tile1 tile2)]
+        , let intersects = any (`anyEdgesIntersect` edges) res
+        -- , trace (show tile1 ++ " " ++ show tile2 ++ " intersects: " ++ show intersects) True
+        , not intersects]
+        -- , all (`tileInPolygon` edges) (rectCorners tile1 tile2)]
         -- , rectangleInPolygon tile1 tile2 edges]
+  -- [area | tile1@(Tile x1 y1) <- tiles
+  --       , tile2@(Tile x2 y2) <- tiles
+  --       , let res = rectEdges tile1 tile2
+  --       , tile1 < tile2
+  --       , not (any (`anyEdgesIntersect` res) edges)]
+  --       -- , all (`tileInPolygon` edges) (rectCorners tile1 tile2)]
+  --       -- , rectangleInPolygon tile1 tile2 edges]
 
 rectEdges :: Tile -> Tile -> [Edge]
 rectEdges (Tile x1 y1) (Tile x2 y2) =
